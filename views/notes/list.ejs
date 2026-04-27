@@ -1,0 +1,12 @@
+<h1>Твої нотатки</h1>
+<a href="/notes/new">Додати нотатку</a>
+<ul>
+  <% notes.forEach(note => { %>
+    <li>
+      <strong><%= note.title %></strong>: <%= note.content %>
+      <form action="/notes/<%= note.id %>/delete" method="POST" style="display:inline">
+        <button type="submit">Видалити</button>
+      </form>
+    </li>
+  <% }) %>
+</ul>
