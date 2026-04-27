@@ -6,14 +6,53 @@ const { requireAuth } = require('../auth');
 // 1. Список нотаток
 router.get('/', requireAuth, async (req, res) => {
     try {
-        const result = await pool.query(
-            'SELECT * FROM notes WHERE user_id = $1 ORDER BY created_at DESC',
-            [req.session.userId]
-        );
-        res.render('notes/list', { notes: result.rows }); 
+        // 1. Отримуємо параметри та ставимо значення за замовчуванням
+        let { search, period, sort, limit, page } = req.query;
+        
+        limit = parseInt(limit) || 10;
+        page = parseInt(page) || 1;
+        sort = sort === 'oldest' ? 'ASC' : 'DESC';
+        const offset = (page - 1) * limit;
+
+        // 2. Базовий SQL запит (Завжди фільтрується по user_id!)
+        let sql = `SELECT * FROM notes WHERE user_id = $1`;
+        let params = [req.session.userId];
+        let paramCount = 1;
+
+        // 3. Додаємо пошук
+        if (search) {
+            paramCount++;
+            sql += ` AND (title ILIKE $${paramCount} OR content ILIKE $${paramCount})`;
+            params.push(`%${search}%`);
+        }
+
+        // 4. Додаємо фільтр по періоду
+        if (period === '7d') {
+            sql += ` AND created_at >= NOW() - INTERVAL '7 days'`;
+        } else if (period === '30d') {
+            sql += ` AND created_at >= NOW() - INTERVAL '30 days'`;
+        }
+
+        // 5. Сортування, Ліміт та Пагінація
+        sql += ` ORDER BY created_at ${sort} LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+        params.push(limit, offset);
+
+        const result = await pool.query(sql, params);
+
+        // 6. Рахуємо загальну кількість для пагінації 
+        const countResult = await pool.query(`SELECT COUNT(*) FROM notes WHERE user_id = $1`, [req.session.userId]);
+        const totalNotes = parseInt(countResult.rows[0].count);
+        const totalPages = Math.ceil(totalNotes / limit);
+
+        res.render('notes/list', { 
+            notes: result.rows, 
+            query: req.query, // передаємо назад, щоб форма пам'ятала, що ми ввели
+            currentPage: page,
+            totalPages: totalPages
+        });
     } catch (err) {
-        console.error("Помилка БД:", err);
-        res.status(500).send("Помилка при завантаженні нотаток");
+        console.error(err);
+        res.status(500).send("Помилка сервера");
     }
 });
 
@@ -21,7 +60,30 @@ router.get('/', requireAuth, async (req, res) => {
 router.get('/new', requireAuth, (req, res) => {
     res.render('notes/new'); 
 });
+//экспорт
+router.get('/export/csv', requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT title, content, created_at FROM notes WHERE user_id = $1', 
+            [req.session.userId]
+        );
+        
+        const fields = ['title', 'content', 'created_at'];
+        const { Parser } = require('json2csv');
+        const json2csvParser = new Parser({ fields });
+        const csv = json2csvParser.parse(result.rows);
 
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename=my_notes.csv');
+
+        //'\ufeff' для перекладу
+        res.send('\ufeff' + csv); 
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Ошибка при экспорте");
+    }
+});
 // 3. Збереження нової нотатки
 router.post('/', requireAuth, async (req, res) => {
     const { title, content } = req.body;

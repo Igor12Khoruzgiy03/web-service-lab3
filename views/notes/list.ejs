@@ -1,12 +1,62 @@
 <h1>Твої нотатки</h1>
-<a href="/notes/new">Додати нотатку</a>
+
+<a href="/notes/new">➕ Додати нотатку</a> | 
+<a href="/notes/export/csv">📥 Експортувати в CSV</a>
+
+<hr>
+
+<section style="background: #f4f4f4; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+    <form action="/notes" method="GET" style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <input type="text" name="search" placeholder="Пошук..." value="<%= query.search || '' %>">
+        
+        <select name="period">
+            <option value="all" <%= query.period === 'all' ? 'selected' : '' %>>За весь час</option>
+            <option value="7d" <%= query.period === '7d' ? 'selected' : '' %>>Останні 7 днів</option>
+            <option value="30d" <%= query.period === '30d' ? 'selected' : '' %>>Останні 30 днів</option>
+        </select>
+
+        <select name="sort">
+            <option value="newest" <%= query.sort === 'newest' ? 'selected' : '' %>>Нові спочатку</option>
+            <option value="oldest" <%= query.sort === 'oldest' ? 'selected' : '' %>>Старі спочатку</option>
+        </select>
+
+        <select name="limit">
+            <option value="5" <%= query.limit == 5 ? 'selected' : '' %>>5 записів</option>
+            <option value="10" <%= query.limit == 10 ? 'selected' : '' %>>10 записів</option>
+        </select>
+
+        <button type="submit" style="background: blue; color: white;">Apply</button>
+        <a href="/notes" style="text-decoration: none; padding: 5px; border: 1px solid gray;">Reset</a>
+    </form>
+</section>
+
 <ul>
-  <% notes.forEach(note => { %>
-    <li>
-      <strong><%= note.title %></strong>: <%= note.content %>
-      <form action="/notes/<%= note.id %>/delete" method="POST" style="display:inline">
-        <button type="submit">Видалити</button>
-      </form>
-    </li>
-  <% }) %>
+    <% if (notes.length > 0) { %>
+        <% notes.forEach(note => { %>
+            <li style="margin-bottom: 15px; border-bottom: 1px solid #ddd; padding-bottom: 10px;">
+                <strong><%= note.created_at.toLocaleDateString() %>:</strong> 
+                <a href="/notes/<%= note.id %>/edit"><%= note.title %></a>
+                
+                <form action="/notes/<%= note.id %>/delete" method="POST" style="display:inline;">
+                    <button type="submit" onclick="return confirm('Видалити?')">Видалити</button>
+                </form>
+                
+                <p><%= note.content.substring(0, 100) %>...</p>
+            </li>
+        <% }) %>
+    <% } else { %>
+        <p>Нотаток не знайдено за такими фільтрами.</p>
+    <% } %>
 </ul>
+
+<div style="margin-top: 20px;">
+    <% if (currentPage > 1) { %>
+        <a href="/notes?page=<%= currentPage - 1 %>&<%= new URLSearchParams(query).toString() %>">⬅ Prev</a>
+    <% } %>
+    
+    <span> Page <%= currentPage %> of <%= totalPages %> </span>
+
+    <% if (currentPage < totalPages) { %>
+        <a href="/notes?page=<%= parseInt(currentPage) + 1 %>&<%= new URLSearchParams(query).toString() %>">Next ➡</a>
+    <% } %>
+</div>
